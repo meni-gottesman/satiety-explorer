@@ -3,6 +3,8 @@
 <title>Unprocessed foods · satiety vs energy density</title>
 <meta name="description" content="2,338 truly unprocessed whole foods plotted by fillingness per calorie vs energy density.">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <style>
  :root{--bg:#faf9f6;--surface:#fff;--ink:#1c1c1a;--muted:#6b6a63;--faint:#9a988e;
   --line:rgba(0,0,0,.10);--line2:rgba(0,0,0,.18);--accent:#1d6b53;
@@ -59,6 +61,10 @@ the more dilute a food, the more filling per calorie.</p>
 </div>
 
 <div class="panel">
+ <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;">
+  <span style="font-size:11.5px;color:var(--faint)">scroll / pinch to zoom · drag to pan · double-click to reset</span>
+  <button id="reset" style="font:inherit;font-size:12px;padding:5px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--bg);color:var(--ink);cursor:pointer">Reset zoom</button>
+ </div>
  <div class="plotwrap"><canvas id="plot" role="img" aria-label="Dot plot of satiety per calorie versus energy density"></canvas></div>
  <div class="legend" id="legend"></div>
 </div>
@@ -110,7 +116,9 @@ function go(){
    data:{datasets:[{data,backgroundColor:cols,pointRadius:3,pointHoverRadius:6,borderWidth:0}]},
    options:{responsive:true,maintainAspectRatio:false,animation:false,
     plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>{const f=i.raw.f;
-      return `${f.n} — score ${f.s}/100, ${f.ed} kcal/g, ${f.kc} kcal, ${f.g}`;}}}},
+      return `${f.n} — score ${f.s}/100, ${f.ed} kcal/g, ${f.kc} kcal, ${f.g}`;}}},
+     zoom:{zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:"xy"},
+       pan:{enabled:true,mode:"xy"},limits:{x:{min:0,minRange:0.5},y:{min:0,max:100,minRange:5}}}},
     scales:{x:{title:{display:true,text:"energy density (kcal/g) — lower = more dilute"},min:0,
       grid:{color:"rgba(128,128,128,.12)"}},
      y:{title:{display:true,text:"fillingness per calorie (0–100)"},min:0,max:100,
@@ -121,4 +129,7 @@ function go(){
 }
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
 go();
+const reset=()=>chart&&chart.resetZoom&&chart.resetZoom();
+document.getElementById("reset").onclick=reset;
+$("#plot").ondblclick=reset;
 </script></body></html>

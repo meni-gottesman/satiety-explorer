@@ -1,0 +1,153 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Food satiety explorer — 232 foods</title>
+<meta name="description" content="232 foods scored by how filling they are per calorie, sorted into 5 tiers. Search and filter.">
+<style>
+ :root{
+  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,Menlo,monospace;
+  --color-text-primary:#1a1a1a;--color-text-secondary:#56554f;--color-text-tertiary:#8a8980;
+  --color-text-info:#185FA5;--color-background-primary:#ffffff;--color-background-secondary:#efeee9;
+  --color-background-info:#E6F1FB;--color-border-tertiary:rgba(0,0,0,.13);
+  --color-border-secondary:rgba(0,0,0,.26);--color-border-info:#85B7EB;--border-radius-md:8px;
+ }
+ @media(prefers-color-scheme:dark){:root{
+  --color-text-primary:#e9e9e6;--color-text-secondary:#b4b2a9;--color-text-tertiary:#888780;
+  --color-text-info:#85B7EB;--color-background-primary:#262624;--color-background-secondary:#201f1e;
+  --color-background-info:#0c2236;--color-border-tertiary:rgba(255,255,255,.14);
+  --color-border-secondary:rgba(255,255,255,.28);--color-border-info:#185FA5;}
+  body{background:#191918}}
+ body{font-family:var(--font-sans);color:var(--color-text-primary);background:#fafaf7;
+  margin:0;padding:22px 20px 40px;max-width:920px;margin:auto;line-height:1.5}
+ h1{font-size:22px;font-weight:600;margin:0 0 4px}
+ .lede{color:var(--color-text-secondary);font-size:14px;margin:0 0 18px}
+ .lede a{color:var(--color-text-info)}
+ footer{margin-top:26px;font-size:12px;color:var(--color-text-tertiary);border-top:1px solid var(--color-border-tertiary);padding-top:12px}
+</style></head><body>
+<h1>Food satiety explorer</h1>
+<p class="lede">232 common foods scored by how <b>filling they are per calorie</b> and sorted into 5 tiers
+&mdash; search, filter by category/tier/calories, and see where everything lands. Greener = more filling
+per calorie; redder = calorie-dense.</p>
+<h2 class="sr-only">Interactive explorer of 232 foods scored by satiety per calorie, with search, category, tier, calorie and energy-density filters, sorting, and a scatter plot of energy density versus satiety.</h2>
+<style>
+  .ex-wrap{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.25rem 0;}
+  .ex-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;}
+  .ex-chip{font-size:11.5px;padding:3px 9px;border-radius:14px;border:0.5px solid var(--color-border-secondary);
+    background:var(--color-background-primary);cursor:pointer;user-select:none;color:var(--color-text-secondary);}
+  .ex-chip.on{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info);}
+  .ex-tier{font-size:11.5px;padding:3px 8px;border-radius:14px;cursor:pointer;user-select:none;}
+  .ex-lab{font-size:11px;color:var(--color-text-tertiary);}
+  .ex-slabel{font-size:11.5px;color:var(--color-text-secondary);}
+  .ex-tr{display:flex;align-items:center;gap:8px;padding:2.5px 0;font-size:12.5px;border-bottom:0.5px solid var(--color-border-tertiary);}
+  .ex-tr:hover{background:var(--color-background-secondary);}
+  .ex-bar{flex:0 0 70px;height:11px;background:var(--color-background-secondary);border-radius:3px;overflow:hidden;}
+  .ex-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ex-g{flex:0 0 78px;font-size:11px;color:var(--color-text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ex-num{font-size:11px;color:var(--color-text-tertiary);text-align:right;}
+  input[type=range].ex-rg{flex:1;min-width:90px;}
+</style>
+<div class="ex-wrap">
+  <div class="ex-row">
+    <input id="ex-search" type="text" placeholder="Search foods…" style="flex:1;min-width:160px;"/>
+    <select id="ex-sort" style="width:185px;">
+      <option value="s_desc">Most filling per calorie</option>
+      <option value="s_asc">Least filling per calorie</option>
+      <option value="kc_asc">Fewest calories</option>
+      <option value="kc_desc">Most calories</option>
+      <option value="ed_asc">Lowest energy density</option>
+      <option value="nrf_desc">Most nutrient-dense</option>
+      <option value="p_desc">Highest protein</option>
+      <option value="az">A to Z</option>
+    </select>
+    <span id="ex-count" class="ex-slabel"></span>
+  </div>
+  <div class="ex-row" id="ex-tiers"></div>
+  <div class="ex-row" id="ex-groups"></div>
+  <div class="ex-row">
+    <span class="ex-lab">max kcal/100g</span>
+    <input id="ex-kcal" class="ex-rg" type="range" min="0" max="900" value="900" step="10"/>
+    <span id="ex-kcalv" class="ex-slabel" style="min-width:42px;">900</span>
+    <span class="ex-lab" style="min-width:64px;">min satiety</span>
+    <input id="ex-minsat" class="ex-rg" type="range" min="0.5" max="5" value="0.5" step="0.1"/>
+    <span id="ex-minsatv" class="ex-slabel" style="min-width:28px;">0.5</span>
+  </div>
+  <div style="position:relative;width:100%;height:260px;margin:4px 0 6px;">
+    <canvas id="ex-chart" role="img" aria-label="Scatter plot of energy density versus satiety score for all foods, colored by tier."></canvas>
+  </div>
+  <div id="ex-list"></div>
+  <div id="ex-empty" style="display:none;text-align:center;padding:14px;color:var(--color-text-secondary);font-size:13px;"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const RAW={"g":["Beverages","Condiments","Dairy","Fast food","Fruit","Grains","Legumes","Nuts/Fats","Protein","Snacks","Soups","Starchy","Vegetables"],"f":[["Cucumber",12,15,0.7,5.0,5,0.15,21],["Lettuce (romaine)",12,17,1.2,5.0,5,0.17,58],["Celery",12,16,0.7,5.0,5,0.16,44],["Spinach",12,23,2.9,5.0,5,0.23,59],["Broccoli",12,34,2.8,4.87,5,0.34,44],["Carrot",12,41,0.9,3.67,5,0.41,29],["Bell pepper",12,31,1.0,4.49,5,0.31,31],["Tomato",12,18,0.9,5.0,5,0.18,34],["Cauliflower",12,25,1.9,5.0,5,0.25,44],["Green beans",12,31,1.8,5.0,5,0.31,43],["Boiled potato",11,87,1.9,2.47,3,0.87,12],["Sweet potato",11,86,1.6,2.47,3,0.86,16],["Sweet corn",11,86,3.3,2.76,4,0.86,19],["Strawberries",4,32,0.7,4.22,5,0.32,27],["Watermelon",4,30,0.6,4.36,5,0.3,9],["Orange",4,47,0.9,3.37,4,0.47,22],["Apple",4,52,0.3,3.1,4,0.52,18],["Blueberries",4,57,0.7,2.98,4,0.57,18],["Grapes",4,69,0.7,2.67,4,0.69,7],["Banana",4,89,1.1,2.37,3,0.89,13],["Raisins (dried)",4,299,3.1,1.5,2,2.99,6],["Lentils (cooked)",6,116,9.0,3.25,4,1.16,40],["Black beans",6,132,8.9,3.2,4,1.32,37],["Chickpeas",6,164,8.9,2.78,4,1.64,27],["Tofu (firm)",6,76,8.1,3.28,4,0.76,23],["Edamame",6,121,11.9,3.12,4,1.21,35],["Oatmeal (cooked)",5,71,2.5,2.87,4,0.71,16],["Brown rice",5,123,2.7,2.13,3,1.23,9],["White rice",5,130,2.7,2.07,3,1.3,5],["Whole-wheat pasta",5,124,5.3,2.52,3,1.24,22],["White pasta",5,158,5.8,2.19,3,1.58,11],["Quinoa (cooked)",5,120,4.4,2.39,3,1.2,16],["Whole-grain bread",5,247,13.0,2.38,3,2.47,18],["White bread",5,265,9.0,1.78,2,2.65,8],["Bagel (plain)",5,257,10.0,1.75,2,2.57,8],["Cornflakes",5,357,7.5,1.37,2,3.57,3],["Granola",5,471,10.0,1.45,2,4.71,2],["Egg (whole)",8,143,12.6,2.87,4,1.43,18],["Chicken breast",8,165,31.0,3.78,5,1.65,38],["Cod (white fish)",8,82,18.0,3.88,5,0.82,44],["Salmon",8,208,20.0,2.94,4,2.08,19],["Canned tuna",8,116,26.0,3.58,5,1.16,45],["Lean beef (90%)",8,176,20.0,3.09,4,1.76,23],["Bacon",8,541,37.0,2.36,3,5.41,14],["Chicken nuggets",8,296,15.0,1.97,3,2.96,11],["Shrimp",8,99,24.0,3.96,5,0.99,48],["Greek yogurt (0%)",2,59,10.0,3.61,5,0.59,34],["Plain yogurt",2,61,3.5,3.17,4,0.61,12],["Cottage cheese",2,98,11.0,2.93,4,0.98,22],["Cheddar cheese",2,403,25.0,2.32,3,4.03,12],["Whole milk",2,61,3.2,2.04,3,0.61,10],["Butter",2,717,0.9,0.5,1,7.17,0],["Ice cream",2,207,3.5,1.29,2,2.07,-13],["Almonds",7,579,21.0,2.53,3,5.79,15],["Peanut butter",7,588,25.0,1.51,2,5.88,11],["Walnuts",7,654,15.0,0.5,1,6.54,8],["Olive oil",7,884,0.0,0.5,1,8.84,0],["Avocado",7,160,2.0,1.98,3,1.6,18],["Potato chips",9,536,7.0,1.0,1,5.36,6],["Milk chocolate",9,535,7.6,0.98,1,5.35,-14],["Gummy candy",9,343,6.9,1.15,2,3.43,-23],["Glazed donut",9,452,4.9,1.03,1,4.52,-6],["Croissant",9,406,8.2,1.29,2,4.06,2],["Chocolate cake",9,371,4.0,1.05,1,3.71,-15],["Saltine crackers",9,421,9.0,1.4,2,4.21,7],["Pretzels",9,380,10.0,1.51,2,3.8,8],["Cola (soda)",0,42,0.0,1.44,2,0.42,-50],["Orange juice",0,45,0.7,1.41,2,0.45,-33],["Beer",0,43,0.5,1.36,2,0.43,2],["Fruit smoothie",0,60,1.0,1.37,2,0.6,-11],["Vegetable broth soup",10,20,1.0,5.0,5,0.2,24],["Chicken noodle soup",10,38,2.5,4.59,5,0.38,18],["Asparagus",12,20,2.2,5.0,5,0.2,60],["Brussels sprouts",12,43,3.4,4.32,5,0.43,47],["Cabbage",12,25,1.3,5.0,5,0.25,46],["Kale",12,35,2.9,4.83,5,0.35,58],["Mushrooms (white)",12,22,3.1,5.0,5,0.22,44],["Onion",12,40,1.1,3.79,5,0.4,21],["Green peas",12,81,5.4,3.3,4,0.81,38],["Eggplant",12,25,1.0,5.0,5,0.25,51],["Beets",12,43,1.6,3.85,5,0.43,31],["Zucchini",12,17,1.2,5.0,5,0.17,35],["Butternut squash",12,45,1.0,3.48,4,0.45,20],["Pumpkin",12,26,1.0,5.0,5,0.26,15],["Cabbage (raw mixed salad)",12,20,1.0,5.0,5,0.2,42],["Artichoke",12,47,3.3,4.17,5,0.47,55],["Sweet potato (baked)",11,90,2.0,2.46,3,0.9,18],["Pear",4,57,0.4,2.96,4,0.57,21],["Peach",4,39,0.9,3.78,5,0.39,18],["Plum",4,46,0.7,3.37,4,0.46,14],["Pineapple",4,50,0.5,3.18,4,0.5,12],["Mango",4,60,0.8,2.9,4,0.6,12],["Kiwi",4,61,1.1,2.92,4,0.61,21],["Cherries",4,63,1.1,2.86,4,0.63,15],["Raspberries",4,52,1.2,3.39,4,0.52,49],["Blackberries",4,43,1.4,3.83,5,0.43,50],["Cantaloupe",4,34,0.8,4.09,5,0.34,14],["Pomegranate",4,83,1.7,2.55,3,0.83,21],["Mandarin orange",4,53,0.8,3.11,4,0.53,15],["Dates (Medjool)",4,277,1.8,1.62,2,2.77,10],["Dried apricots",4,241,3.4,1.84,3,2.41,14],["Avocado (Hass)",4,160,2.0,1.98,3,1.6,18],["Mashed potato",11,113,1.9,1.95,3,1.13,8],["Baked potato (with skin)",11,93,2.5,2.47,3,0.93,14],["French fries",11,312,3.4,1.26,2,3.12,6],["Plantain (cooked)",11,122,0.9,2.01,3,1.22,8],["Couscous (cooked)",5,112,3.8,2.39,3,1.12,11],["Bulgur (cooked)",5,83,3.1,2.82,4,0.83,27],["Barley (cooked)",5,123,2.3,2.12,3,1.23,15],["Farro (cooked)",5,130,5.0,2.38,3,1.3,17],["Buckwheat (cooked)",5,92,3.4,2.65,4,0.92,18],["Sourdough bread",5,256,9.0,1.82,3,2.56,9],["Rye bread",5,259,8.5,1.86,3,2.59,12],["Pita bread",5,275,9.1,1.78,2,2.75,10],["Corn tortilla",5,218,5.7,1.84,3,2.18,16],["Flour tortilla",5,304,8.2,1.53,2,3.04,9],["English muffin",5,235,9.0,1.91,3,2.35,10],["Bran flakes",5,330,10.0,2.6,4,3.3,12],["Muesli",5,360,10.0,1.82,3,3.6,7],["Popcorn (air-popped)",5,387,12.9,3.85,5,3.87,20],["Couscous salad (tabbouleh)",5,120,3.0,2.04,3,1.2,14],["Kidney beans",6,127,8.7,2.96,4,1.27,32],["Pinto beans",6,143,9.0,3.16,4,1.43,35],["Navy beans",6,140,8.2,3.41,4,1.4,38],["Hummus",6,166,7.9,2.27,3,1.66,22],["Split peas (cooked)",6,118,8.3,3.23,4,1.18,39],["Soybeans (cooked)",6,173,16.6,3.07,4,1.73,32],["Tempeh",6,192,20.3,2.8,4,1.92,21],["Refried beans",6,92,5.5,2.77,4,0.92,31],["Falafel",6,333,13.3,1.97,3,3.33,13],["Pork chop (lean)",8,196,27.0,3.4,4,1.96,28],["Ground beef (80/20)",8,254,25.7,3.1,4,2.54,20],["Turkey breast (roasted)",8,135,30.0,3.93,5,1.35,44],["Ham (deli)",8,145,18.0,2.72,4,1.45,25],["Pork sausage",8,301,17.0,2.03,3,3.01,11],["Hot dog",8,290,10.0,1.56,2,2.9,7],["Deli turkey slices",8,104,17.0,3.0,4,1.04,33],["Tilapia",8,96,20.1,3.78,5,0.96,42],["Sardines (canned)",8,208,24.6,2.96,4,2.08,24],["Mackerel",8,205,19.0,2.89,4,2.05,18],["Halibut",8,111,22.5,3.73,5,1.11,40],["Scallops",8,111,20.5,3.61,5,1.11,37],["Crab",8,97,19.4,3.72,5,0.97,40],["Lamb (lean)",8,206,28.0,3.42,4,2.06,27],["Rotisserie chicken",8,190,25.0,3.06,4,1.9,26],["Fried chicken",8,290,22.0,2.4,3,2.9,16],["Beef jerky",8,410,33.0,2.63,4,4.1,14],["Veggie burger",8,180,18.0,2.62,4,1.8,30],["Seitan",8,145,25.0,3.3,4,1.45,37],["Turkey meatballs",8,200,18.0,2.65,4,2.0,19],["2% milk",2,50,3.4,2.32,3,0.5,14],["Skim milk",2,34,3.4,2.89,4,0.34,20],["Mozzarella",2,280,22.2,2.61,4,2.8,16],["Parmesan",2,431,38.5,3.1,4,4.31,18],["Feta",2,264,14.2,2.15,3,2.64,11],["Cream cheese",2,342,6.2,1.09,1,3.42,4],["Sour cream",2,198,2.4,1.48,2,1.98,2],["Ricotta",2,174,11.3,2.34,3,1.74,13],["Flavored yogurt (fruit)",2,99,3.8,1.86,3,0.99,-17],["Egg white",8,52,10.9,4.29,5,0.52,42],["Cottage cheese (2%)",2,84,11.0,3.12,4,0.84,26],["Heavy cream",2,340,2.8,0.63,1,3.4,2],["Cashews",7,553,18.2,1.46,2,5.53,9],["Pistachios",7,560,20.2,2.25,3,5.6,14],["Pecans",7,691,9.2,0.5,1,6.91,8],["Sunflower seeds",7,584,20.8,1.59,2,5.84,12],["Pumpkin seeds",7,559,30.2,2.11,3,5.59,15],["Chia seeds",7,486,16.5,5.0,5,4.86,32],["Tahini",7,595,17.0,1.18,2,5.95,11],["Coconut (shredded)",7,660,6.9,2.03,3,6.6,11],["Mayonnaise",7,680,1.0,0.5,1,6.8,0],["Coconut oil",7,862,0.0,0.5,1,8.62,0],["Margarine",7,717,0.2,0.5,1,7.17,0],["Tortilla chips",9,489,7.0,1.21,2,4.89,6],["Granola bar",9,471,8.0,1.25,2,4.71,-2],["Protein bar",9,350,30.0,2.99,4,3.5,24],["Trail mix",9,462,13.8,1.61,2,4.62,5],["Pop-Tart",9,400,4.0,1.07,1,4.0,-13],["Blueberry muffin",9,377,5.0,1.13,1,3.77,-10],["Brownie",9,466,6.0,1.05,1,4.66,-14],["Cheesecake",9,321,5.5,1.15,2,3.21,-9],["Apple pie",9,265,2.4,1.2,2,2.65,-7],["Marshmallows",9,318,1.8,0.92,1,3.18,-35],["Pancakes (with syrup)",9,230,4.5,1.36,2,2.3,-7],["Waffle",9,291,7.9,1.49,2,2.91,5],["Honey",9,304,0.3,0.96,1,3.04,-54],["Maple syrup",9,260,0.0,0.64,1,2.6,-46],["Jam / jelly",9,250,0.4,1.01,1,2.5,-36],["Diet soda",0,1,0.0,2.52,3,0.01,0],["Sports drink",0,26,0.0,1.92,3,0.26,-46],["Energy drink",0,45,0.0,1.38,2,0.45,-49],["Sweet tea",0,30,0.0,1.76,2,0.3,-53],["Lemonade",0,40,0.1,1.48,2,0.4,-44],["Almond milk (unsweet)",0,15,0.6,2.8,4,0.15,18],["Soy milk",0,43,3.3,2.21,3,0.43,15],["Oat milk",0,47,1.0,1.71,2,0.47,2],["Red wine",0,85,0.1,0.81,1,0.85,0],["Whiskey",0,250,0.0,0.5,1,2.5,0],["Coconut water",0,19,0.7,3.06,4,0.19,28],["Latte (whole milk)",0,60,3.2,2.06,3,0.6,11],["Protein shake",0,70,12.0,2.02,3,0.7,39],["Orange juice (fresh)",0,45,0.7,1.57,2,0.45,-33],["Tomato soup",10,38,1.0,3.69,5,0.38,4],["Minestrone",10,34,1.6,4.67,5,0.34,22],["Lentil soup",10,56,3.6,3.77,5,0.56,29],["Miso soup",10,26,2.0,5.0,5,0.26,24],["Clam chowder",10,95,4.0,2.27,3,0.95,10],["Cheeseburger",3,254,13.0,1.97,3,2.54,10],["Pizza (cheese slice)",3,266,11.0,1.82,3,2.66,11],["Beef taco",3,226,9.0,1.95,3,2.26,13],["Bean burrito",3,206,7.0,1.93,3,2.06,16],["Sushi roll (California)",3,145,4.0,1.92,3,1.45,9],["Mac and cheese",3,164,6.5,1.87,3,1.64,10],["Lasagna",3,132,8.0,2.47,3,1.32,16],["Fried rice",3,163,4.0,1.81,3,1.63,7],["Pad thai",3,153,6.0,2.03,3,1.53,7],["Ramen (instant)",3,188,4.5,1.76,2,1.88,7],["Grilled cheese",3,350,12.0,1.62,2,3.5,8],["Peanut butter & jelly",3,330,11.0,1.57,2,3.3,2],["Caesar salad (with dressing)",3,180,5.0,1.79,2,1.8,10],["Onion rings",3,411,5.4,1.15,2,4.11,4],["Nachos (with cheese)",3,343,9.0,1.47,2,3.43,8],["Chicken caesar wrap",3,220,12.0,2.23,3,2.2,14],["Egg fried breakfast sandwich",3,270,12.0,1.87,3,2.7,11],["Ketchup",1,101,1.0,1.45,2,1.01,-37],["Mustard",1,66,4.4,3.14,4,0.66,31],["Ranch dressing",1,430,1.3,0.5,1,4.3,-1],["Soy sauce",1,53,8.1,2.35,3,0.53,36],["Salsa",1,36,1.5,3.93,5,0.36,26],["Guacamole",1,150,2.0,1.8,3,1.5,17],["BBQ sauce",1,172,0.8,1.13,1,1.72,-32],["Pesto",1,418,5.0,0.88,1,4.18,4]]};
+const G=RAW.g;
+const DATA=RAW.f.map(a=>({n:a[0],g:G[a[1]],kc:a[2],p:a[3],s:a[4],t:a[5],ed:a[6],nrf:a[7]}));
+const TIER={5:{a:"#639922",b:"#97C459",n:"Very high"},4:{a:"#1D9E75",b:"#5DCAA5",n:"High"},
+  3:{a:"#BA7517",b:"#EF9F27",n:"Moderate"},2:{a:"#D85A30",b:"#F0997B",n:"Low"},1:{a:"#E24B4A",b:"#F09595",n:"Very low"}};
+const GROUPS=[...G].sort();
+const state={q:"",sort:"s_desc",tiers:new Set([1,2,3,4,5]),groups:new Set(GROUPS),maxkc:900,minsat:0.5};
+const $=id=>document.getElementById(id);
+
+const tiersEl=$("ex-tiers");
+[5,4,3,2,1].forEach(t=>{const c=document.createElement("span");c.className="ex-tier";
+  c.style.background=TIER[t].b;c.style.color="#222";c.textContent="T"+t+" "+TIER[t].n;
+  c.onclick=()=>{state.tiers.has(t)?state.tiers.delete(t):state.tiers.add(t);
+    c.style.opacity=state.tiers.has(t)?"1":"0.35";render();};tiersEl.appendChild(c);});
+const groupsEl=$("ex-groups");
+GROUPS.forEach(g=>{const c=document.createElement("span");c.className="ex-chip on";c.textContent=g;
+  c.onclick=()=>{if(state.groups.has(g)){state.groups.delete(g);c.classList.remove("on");}
+    else{state.groups.add(g);c.classList.add("on");}render();};groupsEl.appendChild(c);});
+
+$("ex-search").oninput=e=>{state.q=e.target.value.toLowerCase().trim();render();};
+$("ex-sort").onchange=e=>{state.sort=e.target.value;render();};
+$("ex-kcal").oninput=e=>{state.maxkc=+e.target.value;$("ex-kcalv").textContent=e.target.value;render();};
+$("ex-minsat").oninput=e=>{state.minsat=+e.target.value;$("ex-minsatv").textContent=(+e.target.value).toFixed(1);render();};
+
+const match=d=>d.s>=state.minsat&&d.kc<=state.maxkc&&state.tiers.has(d.t)&&state.groups.has(d.g)&&
+  (state.q===""||d.n.toLowerCase().includes(state.q)||d.g.toLowerCase().includes(state.q));
+const SORTS={s_desc:(a,b)=>b.s-a.s,s_asc:(a,b)=>a.s-b.s,kc_asc:(a,b)=>a.kc-b.kc,kc_desc:(a,b)=>b.kc-a.kc,
+  ed_asc:(a,b)=>a.ed-b.ed,nrf_desc:(a,b)=>(b.nrf??-999)-(a.nrf??-999),p_desc:(a,b)=>b.p-a.p,az:(a,b)=>a.n.localeCompare(b.n)};
+
+let chart;
+function buildChart(){chart=new Chart($("ex-chart"),{type:"scatter",
+  data:{datasets:[{data:DATA.map(d=>({x:d.ed,y:d.s,d})),pointRadius:4,pointHoverRadius:6,
+    backgroundColor:DATA.map(d=>TIER[d.t].a)}]},
+  options:{responsive:true,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{
+      label:i=>i.raw.d.n+": satiety "+i.raw.d.s.toFixed(2)+" (T"+i.raw.d.t+"), "+i.raw.d.kc+" kcal/100g"}}},
+    scales:{x:{title:{display:true,text:"energy density (kcal/g)"},min:0,max:9},
+      y:{title:{display:true,text:"satiety score"},min:0,max:5.2}}}});}
+function paintChart(){const ds=chart.data.datasets[0];
+  ds.backgroundColor=DATA.map(d=>match(d)?TIER[d.t].a:"rgba(150,150,150,0.16)");
+  ds.pointRadius=DATA.map(d=>match(d)?4:2.5);chart.update();}
+
+function render(){
+  const rows=DATA.filter(match).sort(SORTS[state.sort]);
+  $("ex-count").textContent=rows.length+" of "+DATA.length+" foods";
+  const list=$("ex-list");list.innerHTML="";
+  rows.forEach((d,i)=>{const t=TIER[d.t];const el=document.createElement("div");el.className="ex-tr";
+    el.innerHTML="<span style='flex:0 0 22px;text-align:right;color:var(--color-text-tertiary);font-size:11px;'>"+(i+1)+
+      "</span><span style='flex:0 0 9px;height:9px;border-radius:50%;background:"+t.a+";' title='Tier "+d.t+"'></span>"+
+      "<span class='ex-name'>"+d.n+"</span><span class='ex-g'>"+d.g+"</span>"+
+      "<span class='ex-bar'><span style='display:block;height:100%;width:"+(d.s/5*100).toFixed(0)+"%;background:"+t.b+";'></span></span>"+
+      "<span style='flex:0 0 30px;text-align:right;font-weight:500;color:"+t.a+";'>"+d.s.toFixed(2)+
+      "</span><span class='ex-num' style='flex:0 0 56px;'>"+d.kc+" kcal</span>"+
+      "<span class='ex-num' style='flex:0 0 60px;'>"+(d.nrf==null?"—":"NRF "+d.nrf)+"</span>";
+    list.appendChild(el);});
+  const empty=$("ex-empty");
+  if(rows.length===0){empty.style.display="block";empty.innerHTML="";
+    if(state.q){const msg=document.createElement("div");msg.textContent="No match in the "+DATA.length+"-food set.";
+      const btn=document.createElement("button");btn.style.marginTop="6px";
+      btn.textContent='Search all food databases for "'+state.q+'" \u2197';
+      btn.onclick=()=>sendPrompt("Look up the satiety score and tier of "+state.q);
+      empty.appendChild(msg);empty.appendChild(btn);}
+    else{empty.textContent="No foods match these filters.";}}
+  else{empty.style.display="none";}
+  if(chart)paintChart();
+}
+buildChart();render();
+</script>
+<footer>Satiety per calorie ranks how full a food leaves you for the energy it costs &mdash; the metric
+that governs appetite. Scores combine energy density, protein, fibre, fat, food form and processing,
+validated against the Holt (1995) Satiety Index. For ranking, not medical advice.</footer>
+</body></html>

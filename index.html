@@ -65,6 +65,12 @@ per-category trend lines, and zoom anywhere.</p>
   <button class="tog on" id="avgbtn">Average duplicates</button>
   <div class="seg" id="colorby"><button data-c="tier" class="on">Colour: tier</button><button data-c="cat">category</button></div>
   <button class="tog" id="trendbtn">Trend lines</button>
+  <select id="osd" title="how aggressively trend-line outliers are removed">
+   <option value="2.5">Outliers: lenient (2.5&sigma;)</option>
+   <option value="2" selected>Outliers: strict (2&sigma;)</option>
+   <option value="1.5">Outliers: very strict (1.5&sigma;)</option>
+   <option value="1">Outliers: aggressive (1&sigma;)</option>
+  </select>
   <button class="tog" id="reset">Reset zoom</button>
  </div>
  <div class="ctl" id="tiers"></div>
@@ -102,7 +108,7 @@ const TN={5:"Very high",4:"High",3:"Moderate",2:"Low",1:"Very low"};
 const CAT={"Vegetables":"#4aa564","Fruits":"#e5588a","Meat":"#b14a52","Eggs":"#e3b23c",
  "Nuts":"#a07346","Legumes":"#8268c4","Fish and seafood":"#1fa3b5","Potatoes":"#d2935a"};
 const $=s=>document.querySelector(s);
-const st={q:"",grp:"All",tiers:new Set([1,2,3,4,5]),mk:900,ms:0,colorby:"tier",trends:false,avg:true};
+const st={q:"",grp:"All",tiers:new Set([1,2,3,4,5]),mk:900,ms:0,colorby:"tier",trends:false,avg:true,osd:2};
 const data=()=>st.avg?AVG:FULL;
 
 const gc={}; FULL.forEach(f=>gc[f.g]=(gc[f.g]||0)+1);
@@ -116,6 +122,7 @@ document.querySelectorAll('#colorby button').forEach(b=>b.onclick=()=>{
  st.colorby=b.dataset.c;document.querySelectorAll('#colorby button').forEach(x=>x.classList.toggle('on',x===b));go();});
 $("#avgbtn").onclick=()=>{st.avg=!st.avg;$("#avgbtn").classList.toggle('on',st.avg);go();};
 $("#trendbtn").onclick=()=>{st.trends=!st.trends;$("#trendbtn").classList.toggle('on',st.trends);go();};
+$("#osd").onchange=e=>{st.osd=+e.target.value;if(st.trends)go();};
 
 let tm;const deb=()=>{clearTimeout(tm);tm=setTimeout(go,130);};
 $("#q").oninput=e=>{st.q=e.target.value.toLowerCase().trim();deb();};
@@ -135,19 +142,24 @@ function corrPts(pts){const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),n=xs.length;
  const mx=xs.reduce((a,b)=>a+b,0)/n,my=ys.reduce((a,b)=>a+b,0)/n;
  let c=0,sx=0,sy=0;for(let i=0;i<n;i++){c+=(xs[i]-mx)*(ys[i]-my);sx+=(xs[i]-mx)**2;sy+=(ys[i]-my)**2;}
  return (sx&&sy)?c/Math.sqrt(sx*sy):0;}
-// robust fit: drop points >2.5 SD from an initial fit, then refit on inliers
+// robust fit: ITERATIVELY drop points beyond st.osd SD of the residuals and
+// refit, until stable or a floor (never trim below half the points / 6).
 function fit(pts){
  if(pts.length<6)return null;
- const L0=ols(pts);if(!L0)return null;
- const res=pts.map(p=>p.y-(L0.sl*p.x+L0.ic));
- const m=res.reduce((a,b)=>a+b,0)/res.length;
- const sd=Math.sqrt(res.reduce((a,b)=>a+(b-m)**2,0)/res.length)||1;
- let inl=pts.filter((p,i)=>Math.abs(res[i]-m)<=2.5*sd);
- const out=pts.length-inl.length;
- if(inl.length<6)inl=pts;
+ const orig=pts.length, floor=Math.max(6,Math.ceil(orig*0.5));
+ let inl=pts.slice();
+ for(let it=0;it<8;it++){
+  const L=ols(inl);if(!L)return null;
+  const res=inl.map(p=>p.y-(L.sl*p.x+L.ic));
+  const m=res.reduce((a,b)=>a+b,0)/res.length;
+  const sd=Math.sqrt(res.reduce((a,b)=>a+(b-m)**2,0)/res.length)||1;
+  const keep=inl.filter((p,i)=>Math.abs(res[i]-m)<=st.osd*sd);
+  if(keep.length===inl.length||keep.length<floor)break;
+  inl=keep;
+ }
  const L=ols(inl);if(!L)return null;
  let x0=1e9,x1=-1e9;for(const p of inl){if(p.x<x0)x0=p.x;if(p.x>x1)x1=p.x;}
- return{sl:L.sl,ic:L.ic,r:corrPts(inl),n:inl.length,out,x0,x1};}
+ return{sl:L.sl,ic:L.ic,r:corrPts(inl),n:inl.length,out:orig-inl.length,x0,x1};}
 
 let chart;
 function go(){
@@ -202,7 +214,7 @@ function drawTrendStats(ts){
  if(!ts.length){el.style.display="none";return;}
  el.style.display="block";
  ts.sort((a,b)=>a.sl-b.sl);
- el.innerHTML='<div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">Per-category trend (outliers beyond 2.5 SD excluded) - slope = score points lost per +1 kcal/g, r = correlation</div>'+
+ el.innerHTML=`<div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">Per-category trend (outliers iteratively removed beyond ${st.osd}&sigma;) - slope = score points lost per +1 kcal/g, r = correlation</div>`+
   ts.map(t=>`<span style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 6px 0;font-size:12.5px">`+
    `<span class="dot" style="background:${CAT[t.g]||'#888'}"></span>${t.g}: slope <b>${t.sl.toFixed(1)}</b>, r = <b>${t.r.toFixed(2)}</b>`+
    `<span style="color:var(--faint)"> (n=${t.n}${t.out?`, ${t.out} excl`:''})</span></span>`).join("");

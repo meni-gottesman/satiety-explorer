@@ -65,7 +65,8 @@ per-category trend lines, and zoom anywhere.</p>
   <button class="tog on" id="avgbtn">Average duplicates</button>
   <div class="seg" id="colorby"><button data-c="tier" class="on">Colour: tier</button><button data-c="cat">category</button></div>
   <button class="tog" id="trendbtn">Trend lines</button>
-  <select id="osd" title="how aggressively trend-line outliers are removed">
+  <div class="seg" id="tmode"><button data-m="curve" class="on">Shape: curved</button><button data-m="line">straight</button></div>
+  <select id="osd" title="how aggressively straight-line outliers are removed">
    <option value="2.5">Outliers: lenient (2.5&sigma;)</option>
    <option value="2" selected>Outliers: strict (2&sigma;)</option>
    <option value="1.5">Outliers: very strict (1.5&sigma;)</option>
@@ -108,7 +109,7 @@ const TN={5:"Very high",4:"High",3:"Moderate",2:"Low",1:"Very low"};
 const CAT={"Vegetables":"#4aa564","Fruits":"#e5588a","Meat":"#b14a52","Eggs":"#e3b23c",
  "Nuts":"#a07346","Legumes":"#8268c4","Fish and seafood":"#1fa3b5","Potatoes":"#d2935a"};
 const $=s=>document.querySelector(s);
-const st={q:"",grp:"All",tiers:new Set([1,2,3,4,5]),mk:900,ms:0,colorby:"tier",trends:false,avg:true,osd:2};
+const st={q:"",grp:"All",tiers:new Set([1,2,3,4,5]),mk:900,ms:0,colorby:"tier",trends:false,avg:true,osd:2,tmode:"curve"};
 const data=()=>st.avg?AVG:FULL;
 
 const gc={}; FULL.forEach(f=>gc[f.g]=(gc[f.g]||0)+1);
@@ -122,7 +123,11 @@ document.querySelectorAll('#colorby button').forEach(b=>b.onclick=()=>{
  st.colorby=b.dataset.c;document.querySelectorAll('#colorby button').forEach(x=>x.classList.toggle('on',x===b));go();});
 $("#avgbtn").onclick=()=>{st.avg=!st.avg;$("#avgbtn").classList.toggle('on',st.avg);go();};
 $("#trendbtn").onclick=()=>{st.trends=!st.trends;$("#trendbtn").classList.toggle('on',st.trends);go();};
+document.querySelectorAll('#tmode button').forEach(b=>b.onclick=()=>{
+ st.tmode=b.dataset.m;document.querySelectorAll('#tmode button').forEach(x=>x.classList.toggle('on',x===b));
+ $("#osd").style.display=st.tmode==="line"?"":"none";if(st.trends)go();});
 $("#osd").onchange=e=>{st.osd=+e.target.value;if(st.trends)go();};
+$("#osd").style.display="none";
 
 let tm;const deb=()=>{clearTimeout(tm);tm=setTimeout(go,130);};
 $("#q").oninput=e=>{st.q=e.target.value.toLowerCase().trim();deb();};
@@ -163,6 +168,31 @@ function fit(pts){
  const L=ols(inl);if(!L)return null;
  let x0=1e9,x1=-1e9;for(const p of inl){if(p.x<x0)x0=p.x;if(p.x>x1)x1=p.x;}
  return{sl:L.sl,ic:L.ic,r:corrPts(inl),n:inl.length,out:orig-inl.length,x0,x1};}
+function rank(v){const a=v.map((x,i)=>[x,i]).sort((p,q)=>p[0]-q[0]);const r=new Array(v.length);
+ a.forEach((e,i)=>r[e[1]]=i);return r;}
+function spearman(pts){return corrPts(rank(pts.map(p=>p.x)).map((rx,i)=>({x:rx,y:rank(pts.map(p=>p.y))[i]})));}
+// robust LOESS: locally-weighted linear regression with biweight robustness -
+// a BENT line that follows the data's actual shape (and is straight where the
+// data is straight). Returns the curve on a grid plus its R^2 and rank-corr.
+function loess(pts,span){
+ const P=pts.slice().sort((a,b)=>a.x-b.x),n=P.length;if(n<8)return null;
+ const xs=P.map(p=>p.x),ys=P.map(p=>p.y),q=Math.max(4,Math.min(n,Math.floor(span*n)));
+ let rw=new Array(n).fill(1);
+ const lf=xq=>{const d=xs.map(x=>Math.abs(x-xq));
+  const h=Math.max(d.slice().sort((a,b)=>a-b)[Math.min(q-1,n-1)],1e-9);
+  let sw=0,swx=0,swy=0,swxx=0,swxy=0;
+  for(let j=0;j<n;j++){const u=d[j]/h;if(u>=1)continue;const w=(1-u*u*u)**3*rw[j];
+   sw+=w;swx+=w*xs[j];swy+=w*ys[j];swxx+=w*xs[j]*xs[j];swxy+=w*xs[j]*ys[j];}
+  if(sw<=0)return ys.reduce((a,b)=>a+b,0)/n;
+  const det=sw*swxx-swx*swx;if(Math.abs(det)<1e-9)return swy/sw;
+  const b=(sw*swxy-swx*swy)/det;return (swy-b*swx)/sw+b*xq;};
+ for(let it=0;it<2;it++){const f=xs.map(lf),res=ys.map((y,i)=>y-f[i]);
+  const s=median(res.map(Math.abs))||1;rw=res.map(r=>{const u=Math.abs(r)/(6*s);return u>=1?0:(1-u*u)**2;});}
+ const f=xs.map(lf),yb=ys.reduce((a,b)=>a+b,0)/n;
+ const ssr=ys.reduce((a,y,i)=>a+(y-f[i])**2,0),sst=ys.reduce((a,y)=>a+(y-yb)**2,0);
+ const x0=xs[0],x1=xs[n-1],GR=46,curve=[];
+ for(let g=0;g<GR;g++){const xq=x0+(x1-x0)*g/(GR-1);curve.push({x:xq,y:lf(xq)});}
+ return{curve,r2:sst?1-ssr/sst:0,rho:spearman(pts),n};}
 
 let chart;
 function go(){
@@ -174,10 +204,15 @@ function go(){
  const datasets=[scatter]; const tstats=[];
  if(st.trends){
   const cats={};res.forEach(f=>{(cats[f.g]=cats[f.g]||[]).push({x:f.ed,y:f.s});});
-  for(const g in cats){const L=fit(cats[g]);if(!L)continue;
-   datasets.push({type:"line",data:[{x:L.x0,y:L.sl*L.x0+L.ic},{x:L.x1,y:L.sl*L.x1+L.ic}],
-    borderColor:CAT[g]||"#888",borderWidth:2.5,pointRadius:0,pointHoverRadius:0,fill:false,tension:0,order:1});
-   tstats.push({g,sl:L.sl,r:L.r,n:L.n,out:L.out});}
+  for(const g in cats){
+   if(st.tmode==="curve"){const C=loess(cats[g],0.45);if(!C)continue;
+    datasets.push({type:"line",data:C.curve,borderColor:CAT[g]||"#888",borderWidth:2.6,
+     pointRadius:0,pointHoverRadius:0,fill:false,tension:0.35,cubicInterpolationMode:"monotone",order:1});
+    tstats.push({g,curve:true,r2:C.r2,rho:C.rho,n:C.n});
+   }else{const L=fit(cats[g]);if(!L)continue;
+    datasets.push({type:"line",data:[{x:L.x0,y:L.sl*L.x0+L.ic},{x:L.x1,y:L.sl*L.x1+L.ic}],
+     borderColor:CAT[g]||"#888",borderWidth:2.5,pointRadius:0,pointHoverRadius:0,fill:false,tension:0,order:1});
+    tstats.push({g,sl:L.sl,r:L.r,n:L.n,out:L.out});}}
  }
  drawTrendStats(tstats);
  if(chart){chart.data.datasets=datasets;chart.update();}
@@ -205,7 +240,12 @@ function drawLegend(res){
 }
 function drawInsight(res){
  const el=$("#insight");
- if(st.grp!=="All"){const L=fit(res.map(f=>({x:f.ed,y:f.s})));
+ if(st.grp!=="All"){const pts=res.map(f=>({x:f.ed,y:f.s}));
+  if(st.tmode==="curve"){const C=loess(pts,0.45);
+   if(C){el.innerHTML=`<b>${st.grp}:</b> fillingness per calorie falls steeply then flattens as energy density rises - a robust <b>LOESS curve</b> follows that bend with fit R&sup2; = <b>${C.r2.toFixed(2)}</b> and rank correlation &rho; = <b>${C.rho.toFixed(2)}</b>; `+
+    `mean energy density ${mean(res,f=>f.ed).toFixed(2)} kcal/g, mean score ${mean(res,f=>f.s).toFixed(0)}.`;
+    return;}}
+  const L=fit(pts);
   if(L){
    el.innerHTML=`<b>${st.grp}:</b> fillingness per calorie falls about <b>${Math.abs(L.sl).toFixed(0)} points</b> for every +1 kcal/g (r = <b>${L.r.toFixed(2)}</b>${L.out?`, ${L.out} outlier${L.out>1?'s':''} excluded`:''}); `+
     `mean energy density ${mean(res,f=>f.ed).toFixed(2)} kcal/g, mean score ${mean(res,f=>f.s).toFixed(0)}.`;
@@ -216,11 +256,17 @@ function drawTrendStats(ts){
  const el=$("#trendstats");
  if(!ts.length){el.style.display="none";return;}
  el.style.display="block";
- ts.sort((a,b)=>a.sl-b.sl);
- el.innerHTML=`<div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">Per-category robust trend (iterative fit; points beyond ${st.osd}&sigma; in MAD set aside) - slope = score points lost per +1 kcal/g, r = correlation</div>`+
+ const curve=st.tmode==="curve";
+ const hdr=curve
+  ?`Per-category robust LOESS curve (locally-weighted fit that bends to follow the data, and runs straight where the data is straight) - &rho; = Spearman rank correlation, fit R&sup2; = variance the curve explains`
+  :`Per-category robust straight line (iterative fit; points beyond ${st.osd}&sigma; in MAD set aside) - slope = score points lost per +1 kcal/g, r = correlation`;
+ if(curve)ts.sort((a,b)=>a.rho-b.rho);else ts.sort((a,b)=>a.sl-b.sl);
+ el.innerHTML=`<div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">${hdr}</div>`+
   ts.map(t=>`<span style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 6px 0;font-size:12.5px">`+
-   `<span class="dot" style="background:${CAT[t.g]||'#888'}"></span>${t.g}: slope <b>${t.sl.toFixed(1)}</b>, r = <b>${t.r.toFixed(2)}</b>`+
-   `<span style="color:var(--faint)"> (n=${t.n}${t.out?`, ${t.out} excl`:''})</span></span>`).join("");
+   `<span class="dot" style="background:${CAT[t.g]||'#888'}"></span>${t.g}: `+
+   (t.curve?`&rho; = <b>${t.rho.toFixed(2)}</b>, fit R&sup2; = <b>${t.r2.toFixed(2)}</b>`
+           :`slope <b>${t.sl.toFixed(1)}</b>, r = <b>${t.r.toFixed(2)}</b>`)+
+   `<span style="color:var(--faint)"> (n=${t.n}${(!t.curve&&t.out)?`, ${t.out} excl`:''})</span></span>`).join("");
 }
 function corr(res){const xs=res.map(f=>f.ed),ys=res.map(f=>f.s),n=xs.length;
  const mx=xs.reduce((a,b)=>a+b,0)/n,my=ys.reduce((a,b)=>a+b,0)/n;

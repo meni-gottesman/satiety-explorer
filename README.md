@@ -1,10 +1,10 @@
-# Non-processed foods — satiety explorer
+# Unprocessed foods — satiety dot plot
 
-An interactive graph of **72,724 non-processed & minimally-processed foods**
-(Open Food Facts, NOVA 1) scored **0–100 by how filling they are per calorie**.
-Search, filter by category / tier / calories, and see the score distribution.
+An interactive **dot plot** of 2,338 truly unprocessed whole foods (Open Food
+Facts, NOVA 1, English): **x = energy density (kcal/g)**, **y = fillingness per
+calorie (0–100)**. Each dot is a food, coloured by tier. Search and filter.
 
 **Live:** https://meni-gottesman.github.io/satiety-explorer/
 
-Higher score = more fullness per calorie. Scored from energy density, protein,
-fibre, fat and food form, validated against the Holt (1995) Satiety Index.
+Scores are percentile ranks (0 = least filling per calorie, 100 = most), spread
+evenly across the full range. Validated against the Holt (1995) Satiety Index.

@@ -293,12 +293,13 @@ function curveFit(pts){
  if(!best)return null;
  const cv=best.cv,fl=best.fl,xv=best.xv,f=x=>fl+cv*(xv-x)*(xv-x);
  const cl=y=>Math.max(0,Math.min(100,y));
- // span the group's full x-range: the parabolic arc from min X to the vertex,
- // then flat at the floor out to max X (slope is already 0 at the vertex, so it
- // joins smoothly). On the left the arc clamps at 100 if it would exceed it.
- const GR=56,curve=[];
- for(let g=0;g<GR;g++){const x=x0+(xv-x0)*g/(GR-1);curve.push({x,y:cl(f(x))});}
- if(x1>xv)curve.push({x:x1,y:cl(fl)});
+ // ONE pure parabolic arc - constant curvature, i.e. constant acceleration the
+ // whole way, with no flat segment anywhere. It runs from the group's min X
+ // (or, for very steep groups, the point where it would reach 100, so there is
+ // no flat cap at the top) to the vertex where its dense cluster bottoms out.
+ let xa=x0;if(cv>0){const xc=xv-Math.sqrt((100-fl)/cv);if(xc>x0&&xc<xv)xa=xc;}
+ const GR=60,curve=[];
+ for(let g=0;g<GR;g++){const x=xa+(xv-xa)*g/(GR-1);curve.push({x,y:cl(f(x))});}
  return{curve,r2:Math.max(0,best.r2),rho:spearman(pts),n};}
 
 let chart;

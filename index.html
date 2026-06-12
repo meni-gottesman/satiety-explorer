@@ -161,42 +161,37 @@ function fit(pts){
 function rank(v){const a=v.map((x,i)=>[x,i]).sort((p,q)=>p[0]-q[0]);const r=new Array(v.length);
  a.forEach((e,i)=>r[e[1]]=i);return r;}
 function spearman(pts){return corrPts(rank(pts.map(p=>p.x)).map((rx,i)=>({x:rx,y:rank(pts.map(p=>p.y))[i]})));}
-// robust single-bend curve: a saturating exponential decay y = c + a*e^(-k*x).
-// ONE smooth elbow - drops steeply then flattens to a floor, monotone and
-// inflection-free (no wiggles). Robust fit: grid-search the rate k (the inner
-// floor c and amplitude a are solved in closed form) under biweight weights,
-// reweighting twice so outliers cannot drag the curve. Drawn clamped to 0-100.
+// uniform single-bend curve: a parabola pinned at the high-energy end,
+// score = floor + curv*(x1 - x)^2. Constant second derivative, so the slope
+// changes at a STEADY rate - one even bend, no sharp elbow - and it stays
+// monotone decreasing and convex, flattening toward high energy density.
+// Robust fit: floor + curvature solved in closed form under biweight weights,
+// reweighting twice so outliers cannot drag it. Drawn clamped to 0-100.
 function curveFit(pts){
  const P=pts.slice().sort((a,b)=>a.x-b.x),n=P.length;if(n<8)return null;
  const xs=P.map(p=>p.x),ys=P.map(p=>p.y),x0=xs[0],x1=xs[n-1];
  if(x1-x0<1e-6)return null;
- const KG=[];for(let i=0;i<90;i++)KG.push(Math.exp(Math.log(0.05)+(Math.log(12)-Math.log(0.05))*i/89));
- let w=new Array(n).fill(1),best=null;
- const inner=k=>{let Sw=0,Su=0,Suu=0,Sy=0,Suy=0;
-  for(let i=0;i<n;i++){const u=Math.exp(-k*xs[i]),wi=w[i];
-   Sw+=wi;Su+=wi*u;Suu+=wi*u*u;Sy+=wi*ys[i];Suy+=wi*u*ys[i];}
-  const det=Sw*Suu-Su*Su;if(Math.abs(det)<1e-12)return null;
-  let a=(Sw*Suy-Su*Sy)/det,c=(Sy-a*Su)/Sw;
-  if(c<0){c=0;a=Suu>0?Suy/Suu:0;}      // floor cannot be negative (score >= 0)
-  if(a<0){a=0;c=Sy/Sw;}                 // never let the trend rise with energy density
-  let ssr=0;for(let i=0;i<n;i++)ssr+=w[i]*(ys[i]-(c+a*Math.exp(-k*xs[i])))**2;
-  return{k,a,c,ssr};};
+ const u=xs.map(x=>(x1-x)*(x1-x));     // basis: (x1 - x)^2, zero at the right end
+ let w=new Array(n).fill(1),cv=0,fl=0;
  for(let it=0;it<3;it++){
-  best=null;for(const k of KG){const r=inner(k);if(r&&(!best||r.ssr<best.ssr))best=r;}
-  if(!best)return null;
-  const res=xs.map((x,i)=>ys[i]-(best.c+best.a*Math.exp(-best.k*x)));
+  let Sw=0,Su=0,Suu=0,Sy=0,Suy=0;
+  for(let i=0;i<n;i++){const wi=w[i];Sw+=wi;Su+=wi*u[i];Suu+=wi*u[i]*u[i];Sy+=wi*ys[i];Suy+=wi*u[i]*ys[i];}
+  const det=Sw*Suu-Su*Su;if(Math.abs(det)<1e-12)return null;
+  cv=(Sw*Suy-Su*Sy)/det;fl=(Sy-cv*Su)/Sw;
+  if(fl<0){fl=0;cv=Suu>0?Suy/Suu:0;}   // floor >= 0 so the arc never rides the x-axis flat
+  if(cv<0){cv=0;fl=Sy/Sw;}             // curve must not rise with energy density
+  const res=xs.map((x,i)=>ys[i]-(fl+cv*u[i]));
   const s=median(res.map(r=>Math.abs(r)))||1;
-  w=res.map(r=>{const u=Math.abs(r)/(6*s);return u>=1?0:(1-u*u)**2;});}
- const k=best.k,a=best.a,c=best.c,f=x=>c+a*Math.exp(-k*x);
+  w=res.map(r=>{const uu=Math.abs(r)/(6*s);return uu>=1?0:(1-uu*uu)**2;});}
+ const f=x=>fl+cv*(x1-x)*(x1-x);
  const yb=ys.reduce((p,q)=>p+q,0)/n;let ssr=0,sst=0;
  for(let i=0;i<n;i++){ssr+=(ys[i]-f(xs[i]))**2;sst+=(ys[i]-yb)**2;}
- // start the drawn arc exactly where it would cross 100, so there is no flat
- // cap - the visible curve is then a pure convex single bend down to its floor.
- let xa=x0;if(a>0){const r=(100-c)/a;if(r>0&&r<1){const xc=-Math.log(r)/k;if(xc>x0&&xc<x1)xa=xc;}}
+ // if the left end would exceed 100, start the arc where it crosses 100 (no flat cap)
+ let xa=x0;if(cv>0){const xc=x1-Math.sqrt((100-fl)/cv);if(xc>x0&&xc<x1)xa=xc;}
  const GR=60,curve=[];
  for(let g=0;g<GR;g++){const x=xa+(x1-xa)*g/(GR-1);curve.push({x,y:Math.max(0,Math.min(100,f(x)))});}
- // R^2 on unweighted residuals, floored at 0 (a robust fit on near-noise data can
- // beat the mean only on its inliers; <=0 honestly reads as "explains ~no variance")
+ // R^2 on unweighted residuals, floored at 0 (a uniform-bend arc trades fit for
+ // shape; <=0 honestly reads as "explains ~no variance" on near-noise categories)
  return{curve,r2:Math.max(0,sst?1-ssr/sst:0),rho:spearman(pts),n};}
 
 let chart;
@@ -247,7 +242,7 @@ function drawInsight(res){
  const el=$("#insight");
  if(st.grp!=="All"){const pts=res.map(f=>({x:f.ed,y:f.s}));
   if(st.tmode==="curve"){const C=curveFit(pts);
-   if(C){el.innerHTML=`<b>${st.grp}:</b> fillingness per calorie falls steeply then flattens as energy density rises - a smooth <b>single-bend curve</b> (saturating exponential) follows that shape with fit R&sup2; = <b>${C.r2.toFixed(2)}</b> and rank correlation &rho; = <b>${C.rho.toFixed(2)}</b>; `+
+   if(C){el.innerHTML=`<b>${st.grp}:</b> fillingness per calorie falls as energy density rises - a smooth <b>uniform single-bend curve</b> (steady change in slope) traces the trend with fit R&sup2; = <b>${C.r2.toFixed(2)}</b> and rank correlation &rho; = <b>${C.rho.toFixed(2)}</b>; `+
     `mean energy density ${mean(res,f=>f.ed).toFixed(2)} kcal/g, mean score ${mean(res,f=>f.s).toFixed(0)}.`;
     return;}}
   const L=fit(pts);
@@ -263,7 +258,7 @@ function drawTrendStats(ts){
  el.style.display="block";
  const curve=st.tmode==="curve";
  const hdr=curve
-  ?`Per-category single-bend curve - a smooth saturating fit (score = floor + amplitude&middot;e<sup>-rate&middot;ED</sup>) that drops steeply then flattens, with one bend and no wiggles - &rho; = Spearman rank correlation, fit R&sup2; = variance the curve explains`
+  ?`Per-category uniform single-bend curve - a smooth parabolic arc with a steady change in slope (one even bend, no sharp elbow), monotone and flattening toward high energy density - &rho; = Spearman rank correlation, fit R&sup2; = variance the curve explains`
   :`Per-category robust straight line (iterative fit; outliers beyond 2&sigma; in MAD set aside) - slope = score points lost per +1 kcal/g, r = correlation`;
  if(curve)ts.sort((a,b)=>a.rho-b.rho);else ts.sort((a,b)=>a.sl-b.sl);
  el.innerHTML=`<div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">${hdr}</div>`+

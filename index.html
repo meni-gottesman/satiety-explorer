@@ -142,18 +142,21 @@ function corrPts(pts){const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),n=xs.length;
  const mx=xs.reduce((a,b)=>a+b,0)/n,my=ys.reduce((a,b)=>a+b,0)/n;
  let c=0,sx=0,sy=0;for(let i=0;i<n;i++){c+=(xs[i]-mx)*(ys[i]-my);sx+=(xs[i]-mx)**2;sy+=(ys[i]-my)**2;}
  return (sx&&sy)?c/Math.sqrt(sx*sy):0;}
-// robust fit: ITERATIVELY drop points beyond st.osd SD of the residuals and
-// refit, until stable or a floor (never trim below half the points / 6).
+function median(a){const b=a.slice().sort((x,y)=>x-y),n=b.length;
+ return n?(n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2):0;}
+// Robust fit: iterative least-squares, flagging outliers by their residual in
+// MAD units (median absolute deviation - a robust spread that outliers can't
+// inflate, unlike SD). Refit on the bulk until stable. Handles clustered x.
 function fit(pts){
  if(pts.length<6)return null;
- const orig=pts.length, floor=Math.max(6,Math.ceil(orig*0.5));
+ const orig=pts.length, floor=Math.max(6,Math.ceil(orig*0.45));
  let inl=pts.slice();
- for(let it=0;it<8;it++){
+ for(let it=0;it<12;it++){
   const L=ols(inl);if(!L)return null;
   const res=inl.map(p=>p.y-(L.sl*p.x+L.ic));
-  const m=res.reduce((a,b)=>a+b,0)/res.length;
-  const sd=Math.sqrt(res.reduce((a,b)=>a+(b-m)**2,0)/res.length)||1;
-  const keep=inl.filter((p,i)=>Math.abs(res[i]-m)<=st.osd*sd);
+  const mr=median(res);
+  const mad=(median(res.map(r=>Math.abs(r-mr)))||0.5)*1.4826;
+  const keep=inl.filter((p,i)=>Math.abs(res[i]-mr)<=st.osd*mad);
   if(keep.length===inl.length||keep.length<floor)break;
   inl=keep;
  }
@@ -214,7 +217,7 @@ function drawTrendStats(ts){
  if(!ts.length){el.style.display="none";return;}
  el.style.display="block";
  ts.sort((a,b)=>a.sl-b.sl);
- el.innerHTML=`<div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">Per-category trend (outliers iteratively removed beyond ${st.osd}&sigma;) - slope = score points lost per +1 kcal/g, r = correlation</div>`+
+ el.innerHTML=`<div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">Per-category robust trend (iterative fit; points beyond ${st.osd}&sigma; in MAD set aside) - slope = score points lost per +1 kcal/g, r = correlation</div>`+
   ts.map(t=>`<span style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 6px 0;font-size:12.5px">`+
    `<span class="dot" style="background:${CAT[t.g]||'#888'}"></span>${t.g}: slope <b>${t.sl.toFixed(1)}</b>, r = <b>${t.r.toFixed(2)}</b>`+
    `<span style="color:var(--faint)"> (n=${t.n}${t.out?`, ${t.out} excl`:''})</span></span>`).join("");

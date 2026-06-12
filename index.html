@@ -81,6 +81,7 @@ per-category trend lines, and zoom anywhere.</p>
  <div style="font-size:11.5px;color:var(--faint);margin-bottom:5px">scroll / pinch to zoom - drag to pan - double-click to reset - bigger dots = more variants averaged</div>
  <div class="plotwrap"><canvas id="plot" role="img" aria-label="Dot plot of satiety per calorie versus energy density"></canvas></div>
  <div class="legend" id="legend"></div>
+ <div id="trendstats" style="display:none;margin-top:11px;padding-top:11px;border-top:1px solid var(--line)"></div>
 </div>
 
 <div class="panel" style="padding-top:8px">
@@ -126,10 +127,27 @@ const colorOf=f=>st.colorby==="tier"?TIER[f.t]:(CAT[f.g]||"#888");
 const radOf=f=>st.avg?Math.min(9,3.4+Math.log2(f.c)*1.15):4;
 const match=f=>f.s>=st.ms&&f.kc<=st.mk&&st.tiers.has(f.t)&&(st.grp==="All"||f.g===st.grp)&&(st.q===""||f.n.toLowerCase().includes(st.q));
 
-function fit(pts){const n=pts.length;if(n<6)return null;let sx=0,sy=0,sxx=0,sxy=0,x0=1e9,x1=-1e9;
- for(const p of pts){sx+=p.x;sy+=p.y;sxx+=p.x*p.x;sxy+=p.x*p.y;if(p.x<x0)x0=p.x;if(p.x>x1)x1=p.x;}
+function ols(pts){const n=pts.length;let sx=0,sy=0,sxx=0,sxy=0;
+ for(const p of pts){sx+=p.x;sy+=p.y;sxx+=p.x*p.x;sxy+=p.x*p.y;}
  const d=n*sxx-sx*sx;if(Math.abs(d)<1e-9)return null;
- const sl=(n*sxy-sx*sy)/d,ic=(sy-sl*sx)/n;return{sl,ic,x0,x1,n};}
+ const sl=(n*sxy-sx*sy)/d;return{sl,ic:(sy-sl*sx)/n};}
+function corrPts(pts){const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),n=xs.length;
+ const mx=xs.reduce((a,b)=>a+b,0)/n,my=ys.reduce((a,b)=>a+b,0)/n;
+ let c=0,sx=0,sy=0;for(let i=0;i<n;i++){c+=(xs[i]-mx)*(ys[i]-my);sx+=(xs[i]-mx)**2;sy+=(ys[i]-my)**2;}
+ return (sx&&sy)?c/Math.sqrt(sx*sy):0;}
+// robust fit: drop points >2.5 SD from an initial fit, then refit on inliers
+function fit(pts){
+ if(pts.length<6)return null;
+ const L0=ols(pts);if(!L0)return null;
+ const res=pts.map(p=>p.y-(L0.sl*p.x+L0.ic));
+ const m=res.reduce((a,b)=>a+b,0)/res.length;
+ const sd=Math.sqrt(res.reduce((a,b)=>a+(b-m)**2,0)/res.length)||1;
+ let inl=pts.filter((p,i)=>Math.abs(res[i]-m)<=2.5*sd);
+ const out=pts.length-inl.length;
+ if(inl.length<6)inl=pts;
+ const L=ols(inl);if(!L)return null;
+ let x0=1e9,x1=-1e9;for(const p of inl){if(p.x<x0)x0=p.x;if(p.x>x1)x1=p.x;}
+ return{sl:L.sl,ic:L.ic,r:corrPts(inl),n:inl.length,out,x0,x1};}
 
 let chart;
 function go(){
@@ -138,13 +156,15 @@ function go(){
  const scatter={type:"scatter",data:res.map(f=>({x:f.ed,y:f.s,f})),
    backgroundColor:res.map(colorOf),pointRadius:res.map(radOf),pointHoverRadius:res.map(f=>radOf(f)+3),
    borderWidth:0.8,borderColor:"rgba(255,255,255,0.55)",hoverBorderColor:"#111",hoverBorderWidth:1.5,order:2};
- const datasets=[scatter];
+ const datasets=[scatter]; const tstats=[];
  if(st.trends){
   const cats={};res.forEach(f=>{(cats[f.g]=cats[f.g]||[]).push({x:f.ed,y:f.s});});
   for(const g in cats){const L=fit(cats[g]);if(!L)continue;
    datasets.push({type:"line",data:[{x:L.x0,y:L.sl*L.x0+L.ic},{x:L.x1,y:L.sl*L.x1+L.ic}],
-    borderColor:CAT[g]||"#888",borderWidth:2.5,pointRadius:0,pointHoverRadius:0,fill:false,tension:0,order:1});}
+    borderColor:CAT[g]||"#888",borderWidth:2.5,pointRadius:0,pointHoverRadius:0,fill:false,tension:0,order:1});
+   tstats.push({g,sl:L.sl,r:L.r,n:L.n,out:L.out});}
  }
+ drawTrendStats(tstats);
  if(chart){chart.data.datasets=datasets;chart.update();}
  else chart=new Chart($("#plot"),{data:{datasets},
    options:{responsive:true,maintainAspectRatio:false,animation:{duration:280},
@@ -171,11 +191,21 @@ function drawLegend(res){
 function drawInsight(res){
  const el=$("#insight");
  if(st.grp!=="All"){const L=fit(res.map(f=>({x:f.ed,y:f.s})));
-  if(L){const r=corr(res);
-   el.innerHTML=`<b>${st.grp}:</b> fillingness per calorie falls about <b>${Math.abs(L.sl).toFixed(0)} points</b> for every +1 kcal/g (r = ${r.toFixed(2)}); `+
+  if(L){
+   el.innerHTML=`<b>${st.grp}:</b> fillingness per calorie falls about <b>${Math.abs(L.sl).toFixed(0)} points</b> for every +1 kcal/g (r = <b>${L.r.toFixed(2)}</b>${L.out?`, ${L.out} outlier${L.out>1?'s':''} excluded`:''}); `+
     `mean energy density ${mean(res,f=>f.ed).toFixed(2)} kcal/g, mean score ${mean(res,f=>f.s).toFixed(0)}.`;
    return;}}
  el.innerHTML=`<b>Across all foods:</b> score falls about <b>10 points</b> per +1 kcal/g of energy density (r = -0.66) - energy density alone explains most of the ranking. Turn on <b>trend lines</b> to see how the slope differs by category.`;
+}
+function drawTrendStats(ts){
+ const el=$("#trendstats");
+ if(!ts.length){el.style.display="none";return;}
+ el.style.display="block";
+ ts.sort((a,b)=>a.sl-b.sl);
+ el.innerHTML='<div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">Per-category trend (outliers beyond 2.5 SD excluded) - slope = score points lost per +1 kcal/g, r = correlation</div>'+
+  ts.map(t=>`<span style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 6px 0;font-size:12.5px">`+
+   `<span class="dot" style="background:${CAT[t.g]||'#888'}"></span>${t.g}: slope <b>${t.sl.toFixed(1)}</b>, r = <b>${t.r.toFixed(2)}</b>`+
+   `<span style="color:var(--faint)"> (n=${t.n}${t.out?`, ${t.out} excl`:''})</span></span>`).join("");
 }
 function corr(res){const xs=res.map(f=>f.ed),ys=res.map(f=>f.s),n=xs.length;
  const mx=xs.reduce((a,b)=>a+b,0)/n,my=ys.reduce((a,b)=>a+b,0)/n;

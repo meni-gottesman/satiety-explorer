@@ -441,7 +441,10 @@ function scoreAtED(ed){                   // interpolate the smooth ED->score lo
  for(let i=1;i<ES.length;i++){if(ed<=ES[i][0]){const[a,sa]=ES[i-1],[b,sb]=ES[i];
   return sa+(sb-sa)*(ed-a)/(b-a);}}
  return ES[ES.length-1][1];}
-const cst={sex:"m",units:"metric"};
+// example foods for the "still hungry" advice: near-zero-calorie volume vs filling-but-substantial
+const VOLFOODS=AVG.slice().sort((a,b)=>a.ed-b.ed).slice(0,5).map(f=>f.n);
+const FILLFOODS=AVG.filter(f=>f.ed>=0.7&&f.ed<=1.7).sort((a,b)=>b.s-a.s).slice(0,5).map(f=>f.n);
+const cst={sex:"m",units:"metric",bulk:0,cal:0};   // bulk = extra food g, cal = extra kcal (still-hungry levers)
 document.querySelectorAll('#cSex button').forEach(b=>b.onclick=()=>{cst.sex=b.dataset.s;
  document.querySelectorAll('#cSex button').forEach(x=>x.classList.toggle('on',x===b));calc();});
 document.querySelectorAll('#cUnits button').forEach(b=>b.onclick=()=>{
@@ -461,24 +464,39 @@ function calc(){
  if(!(age>=14&&age<=100&&kg>20&&kg<400&&cm>120&&cm<230)){out.classList.remove('show');return;}
  const bmr=10*kg+6.25*cm-5*age+(cst.sex==="m"?5:-161);
  const tdee=bmr*(+$("#cAct").value);
- const target=Math.max(900, tdee+(+$("#cGoal").value));
- const W=Math.min(3000,Math.max(1400,2000*(kg/70)));   // fullness weight (g/day)
- const ed=target/W;                                    // required energy density kcal/g
+ const target=Math.max(900, tdee+(+$("#cGoal").value)+cst.cal);   // + still-hungry calorie headroom
+ const W=Math.min(3600,Math.max(1400,2000*(kg/70))+cst.bulk);     // + still-hungry extra food bulk
+ const ed=target/W;                                               // required energy density kcal/g
  const score=Math.max(0,Math.min(100,Math.round(scoreAtED(ed))));
  const kgFood=(W/1000).toFixed(1), deficit=Math.round(tdee-target);
+ const list=a=>a.slice(0,4).map(esc).join(", ");
  out.classList.add('show');
- out.innerHTML=`<div class="calcrow">`+
+ let h=`<div class="calcrow">`+
   `<div class="metric"><b>${score}</b><span>avg satiety score / day</span></div>`+
   `<div class="metric"><b>${Math.round(tdee)}</b><span>maintenance kcal</span></div>`+
   `<div class="metric"><b>${Math.round(target)}</b><span>target kcal</span></div>`+
   `<div class="metric"><b>${ed.toFixed(2)}</b><span>kcal/g energy density</span></div></div>`+
-  `<div class="calcexpl">To feel full on about <b>${Math.round(target)} kcal</b> while still eating your ~<b>${kgFood} kg</b> of food a day, `+
+  `<div class="calcexpl">To feel full on about <b>${Math.round(target)} kcal</b> while eating ~<b>${kgFood} kg</b> of food a day, `+
   `your day should average a satiety score of about <b>${score}</b> (energy density ~${ed.toFixed(2)} kcal/g). `+
   (deficit>0?`That's the ${deficit} kcal/day deficit doing the work - the bigger the deficit, the higher the score you need. `:``)+
   `Build most of the day from foods at or above it; protein and fibre let you go a little lower. `+
   `<a href="#" id="cShow">Show foods scoring ${score}+ &rarr;</a></div>`;
+ // applied still-hungry adjustments
+ if(cst.bulk>0)h+=`<div class="calcexpl" style="margin-top:7px">+ <b>${(cst.bulk/1000).toFixed(1)} kg more food, same calories:</b> `+
+   `pad meals with near-zero-calorie volume (${list(VOLFOODS)}) and swap denser picks lighter - this is why the target score rose.</div>`;
+ if(cst.cal>0)h+=`<div class="calcexpl" style="margin-top:7px">+ <b>${cst.cal} kcal of headroom:</b> `+
+   `spend it on the most filling foods (${list(FILLFOODS)}); your deficit shrinks but hunger eases.</div>`;
+ // still-hungry levers
+ h+=`<div class="calcexpl" style="margin-top:10px"><b>Still hungry doing this?</b> Two ways to get fuller:&nbsp; `+
+   `<a href="#" id="cBulk">+ more food, no extra calories &rarr;</a>&nbsp;&middot;&nbsp; `+
+   `<a href="#" id="cCal">+ a little more food, ~200 kcal &rarr;</a>`+
+   (cst.bulk||cst.cal?`&nbsp;&middot;&nbsp;<a href="#" id="cReset">reset</a>`:``)+`</div>`;
+ out.innerHTML=h;
  $("#cShow").onclick=e=>{e.preventDefault();st.ms=score;$("#ms").value=score;$("#msv").textContent=score;
   go();$(".plotwrap").scrollIntoView({behavior:"smooth",block:"center"});};
+ $("#cBulk").onclick=e=>{e.preventDefault();cst.bulk=Math.min(1600,cst.bulk+350);calc();};
+ $("#cCal").onclick=e=>{e.preventDefault();cst.cal=Math.min(800,cst.cal+200);calc();};
+ if($("#cReset"))$("#cReset").onclick=e=>{e.preventDefault();cst.bulk=0;cst.cal=0;calc();};
 }
 calc();
 go();

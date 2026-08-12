@@ -138,12 +138,14 @@ density</b>, then <b>fibre</b> and <b>protein</b>. <a href="satiety_algorithm_pa
     <li><b>It uses the strongest predictors, weighted by the evidence.</b> A meta-analysis-level review finds
         <b>energy density</b> is the single most robust driver, with fibre and protein adding modestly and fat
         subtracting &ndash; exactly how this score weights them (glycaemic index, which has no measured effect, is left out).</li>
-    <li><b>It is checked against measurements, and against itself.</b> The scoring formula reproduces the
-        ordering of Holt's <i>measured</i> Satiety Index (rank correlation ~0.75 across his 38 foods), and it was
-        put through an independent test on 16,446 real recipes, where it agreed with a blind expert-prompted
-        judge at rank correlation ~0.89 &mdash; about as closely as two such judges agree with each other.
-        Adding more label variables does not reliably improve out-of-sample accuracy, so it sits near the
-        practical ceiling for any score computed from a nutrition panel alone.</li>
+    <li><b>It is checked against human measurements, not just against itself.</b> Two independent human
+        datasets, and it holds up against both. It reproduces the ordering of Holt's <i>measured</i> Satiety Index
+        (rank correlation <b>0.75</b> over his 38 fed-and-measured foods) &mdash; slightly <i>better</i> than the
+        published model built from 1,127 people's satiety ratings (Buckland et al. 2015), which scores 0.70 on the
+        same benchmark, and well ahead of energy density alone (0.64). Run over 16,446 real recipes, this score and
+        that independent human-derived model agree at <b>0.75</b>. Adding more label variables does not reliably
+        improve out-of-sample accuracy, so it sits near the practical ceiling for any score computed from a
+        nutrition panel alone.</li>
     <li><b>The ranking is robust.</b> Scores are <b>percentile ranks</b>, so a few odd data points can't distort the
         scale and every food is directly comparable. Each food counts once, however many label variants it merged.</li>
     <li><b>The data is cleaned.</b> Foods are filtered to Open Food Facts' unprocessed group (NOVA&nbsp;1) and

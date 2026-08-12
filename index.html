@@ -89,7 +89,9 @@ density</b>, then <b>fibre</b> and <b>protein</b>. <a href="satiety_algorithm_pa
       0 = the least.</p>
    <ul>
     <li><b>Top of the list</b> &ndash; potatoes, pulses (beans, peas, lentils) and watery, low-energy-density
-        vegetables: a lot of fullness for very few calories.</li>
+        vegetables: a lot of fullness for very few calories. <b>Potato sits at&nbsp;#1 partly by hand:</b> Holt
+        measured boiled potato far above what any nutrition formula predicts, so it carries a
+        2.43&times; correction taken from that measurement. Without it potato would rank mid-table.</li>
     <li><b>Bottom of the list</b> &ndash; nuts, seeds and oily / fatty foods: calorie-dense, so little fullness per calorie.</li>
    </ul>
    <p>Colour is a tier from very high (green) to very low (red). <b>Search</b> a food or pick a <b>category</b>
@@ -136,13 +138,18 @@ density</b>, then <b>fibre</b> and <b>protein</b>. <a href="satiety_algorithm_pa
     <li><b>It uses the strongest predictors, weighted by the evidence.</b> A meta-analysis-level review finds
         <b>energy density</b> is the single most robust driver, with fibre and protein adding modestly and fat
         subtracting &ndash; exactly how this score weights them (glycaemic index, which has no measured effect, is left out).</li>
-    <li><b>It was validated, not just asserted.</b> The formula was fitted and cross-validated against published
-        satiety-index data. Adding more variables did <b>not</b> improve out-of-sample accuracy, so it sits close to
-        the practical ceiling for any score computed from a nutrition label alone.</li>
+    <li><b>It is checked against measurements, and against itself.</b> The scoring formula reproduces the
+        ordering of Holt's <i>measured</i> Satiety Index (rank correlation ~0.75 across his 38 foods), and it was
+        put through an independent test on 16,446 real recipes, where it agreed with a blind expert-prompted
+        judge at rank correlation ~0.89 &mdash; about as closely as two such judges agree with each other.
+        Adding more label variables does not reliably improve out-of-sample accuracy, so it sits near the
+        practical ceiling for any score computed from a nutrition panel alone.</li>
     <li><b>The ranking is robust.</b> Scores are <b>percentile ranks</b>, so a few odd data points can't distort the
         scale and every food is directly comparable. Each food counts once, however many label variants it merged.</li>
-    <li><b>The data is cleaned.</b> We keep only whole, unprocessed foods and reconcile every food's calories against
-        its protein, carbs and fat, dropping entries that don't add up.</li>
+    <li><b>The data is cleaned.</b> Foods are filtered to Open Food Facts' unprocessed group (NOVA&nbsp;1) and
+        every food's calories are reconciled against its protein, carbs and fat. That filter is the database's own
+        label, not ours, and it lets through a handful of fermented and preserved foods &ndash; sauerkraut, kimchi,
+        natto, tempeh, seaweed, cured ham &ndash; so "unprocessed" here means "NOVA&nbsp;1", not literally raw.</li>
    </ul>
    <p>In short, for a score you can compute from any nutrition label, this is about as accurate as it gets &ndash; the
       limitations below cover what no label-based score can do.</p>
